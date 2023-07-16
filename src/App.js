@@ -19,6 +19,13 @@ export const ACTIONS = {
 
 const reducer = (state, action) => {
   if (action.type === ACTIONS.ADD_DIGIT) {
+    if (state.overwrite) {
+      return {
+        ...state,
+        currentOperand: action.payload.digit,
+        overwrite: false,
+      };
+    }
     if (action.payload.digit === "0" && state.currentOperand === "0")
       return state;
     if (action.payload.digit === "." && state.currentOperand.includes("."))
@@ -30,28 +37,81 @@ const reducer = (state, action) => {
   }
 
   if (action.type === ACTIONS.CHOOSE_OPERATION) {
-    if (state.currentOperand == null && state.previousOperand == null) {
+    if (state.currentOperand === "" && state.previousOperand === "") {
       return state;
     }
 
-    if (state.previousOperand == null) {
+    if (state.previousOperand === "") {
       return {
         ...state,
         operation: action.payload.operation,
         previousOperand: state.currentOperand,
-        currentOperand: null,
+        currentOperand: "",
       };
     }
+
+    if (state.currentOperand === "") {
+      return {
+        ...state,
+        operation: action.payload.operation,
+      };
+    }
+
     return {
       ...state,
       previousOperand: evaluate(state),
       operation: action.payload.operation,
-      currentOperand: null,
+      currentOperand: "",
+    };
+  }
+
+  if (action.type === ACTIONS.EVALUATE) {
+    if (
+      state.previousOperand === "" ||
+      state.currentOperand === "" ||
+      state.operation === ""
+    ) {
+      return state;
+    }
+    return {
+      ...state,
+      overwrite: true,
+      currentOperand: evaluate(state),
+      previousOperand: "",
+      operation: "",
+    };
+  }
+
+  if (action.type === ACTIONS.DELETE_DIGIIT) {
+    if (state.currentOperand === "") {
+      return state;
+    }
+    if (state.currentOperand.length === 1) {
+      return {
+        ...state,
+        currentOperand: "",
+      };
+    }
+    if (state.overwrite) {
+      return {
+        ...state,
+        overwrite: false,
+        currentOperand: "",
+      };
+    }
+
+    return {
+      ...state,
+      currentOperand: state.currentOperand.slice(0, -1),
     };
   }
 
   if (action.type === ACTIONS.CLEAR) {
-    return {};
+    return {
+      currentOperand: "",
+      previousOperand: "",
+      operation: "",
+    };
   }
 };
 
@@ -81,8 +141,27 @@ function evaluate({ currentOperand, previousOperand, operation }) {
   return computation.toString();
 }
 
+const INTEGER_FORMATTER = new Intl.NumberFormat("en-us", {
+  maximumFractionDigits: 0,
+});
+
+function formateOperand(operand) {
+  if (operand === "") return;
+  const [integer, decimal] = operand.split(".");
+  if (decimal == null) return INTEGER_FORMATTER.format(integer);
+  return `${INTEGER_FORMATTER.format(integer)}.${decimal}`;
+}
+
 function App() {
   const [state, dispatch] = useReducer(reducer, defaultState);
+
+  const evaluateNum = () => {
+    dispatch({ type: ACTIONS.EVALUATE });
+  };
+
+  const deleteDigit = () => {
+    dispatch({ type: ACTIONS.DELETE_DIGIIT });
+  };
 
   const clearScreen = () => {
     dispatch({ type: ACTIONS.CLEAR });
@@ -92,14 +171,16 @@ function App() {
     <div className="calculator-grid">
       <div className="output">
         <div className="previous-operand">
-          {state.previousOperand} {state.operation}
+          {formateOperand(state.previousOperand)} {state.operation}
         </div>
-        <div className="current-operand">{state.currentOperand}</div>
+        <div className="current-operand">
+          {formateOperand(state.currentOperand)}
+        </div>
       </div>
       <button className="span-two" onClick={clearScreen}>
         AC
       </button>
-      <button>DEL</button>
+      <button onClick={deleteDigit}>DEL</button>
       <OperationButton operation="/" dispatch={dispatch} />
       <DigitButton digit="1" dispatch={dispatch} />
       <DigitButton digit="2" dispatch={dispatch} />
@@ -115,7 +196,9 @@ function App() {
       <OperationButton operation="-" dispatch={dispatch} />
       <DigitButton digit="." dispatch={dispatch} />
       <DigitButton digit="0" dispatch={dispatch} />
-      <button className="span-two">=</button>
+      <button className="span-two" onClick={evaluateNum}>
+        =
+      </button>
     </div>
   );
 }
